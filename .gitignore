@@ -17,3 +17,6 @@ Thumbs.db
 # Logs
 *.log
 .gstack/
+
+# Runtime data (SQLite databases)
+.data/
