@@ -196,10 +196,26 @@ function cleanupExpiredLocks() {
   ).run();
 }
 
+function buildUpdate(table, id, idCol, fields, allowedKeys, jsonKeys = []) {
+  const sets = [];
+  const vals = [];
+  for (const [k, v] of Object.entries(fields)) {
+    if (allowedKeys.includes(k)) {
+      sets.push(`${k} = ?`);
+      vals.push(jsonKeys.includes(k) ? JSON.stringify(v) : v);
+    }
+  }
+  if (sets.length === 0) return null;
+  sets.push("updated_at = datetime('now')");
+  vals.push(id);
+  return { sql: `UPDATE ${table} SET ${sets.join(', ')} WHERE ${idCol} = ?`, params: vals };
+}
+
 module.exports = {
   init, getDb,
   insertMessage, messageExists, getRecentMessages,
   createSession, updateSessionStatus, getSession, getActiveSessions, getIdleSessions, touchSession,
   createTask, updateTaskStatus, assignTask, getTasks, getReadyTasks,
   acquireLock, releaseLock, cleanupExpiredLocks,
+  buildUpdate,
 };

@@ -8,7 +8,9 @@ try {
     apiKey: process.env.ANTHROPIC_API_KEY,
     baseURL: process.env.ANTHROPIC_BASE_URL || 'https://api.deepseek.com/anthropic',
   });
-} catch {}
+} catch (e) {
+  console.warn('Anthropic SDK init failed, intent classification will use keywords only:', e.message);
+}
 
 const TASK_VERBS = [
   '做', '实现', '开发', '搭建', '写', '创建', '修改', '改', '加', '添加',
@@ -20,7 +22,7 @@ function parseAtMentions(text) {
     'ceo': 'ceo', 'CEO': 'ceo', '@ceo': 'ceo', '@CEO': 'ceo',
     'pm': 'pm', 'PM': 'pm', '@pm': 'pm', '@PM': 'pm',
     '架构师': 'architect', 'architect': 'architect',
-    '后端': 'backend-dev', 'backend': 'backend-dev', '前端': 'frontend-dev', 'frontend': 'frontend-dev',
+    '后端': 'backend', 'backend': 'backend', '前端': 'frontend', 'frontend': 'frontend',
     'qa': 'qa', 'QA': 'qa',
     '审查': 'reviewer', 'reviewer': 'reviewer', 'review': 'reviewer',
     '测试': 'tester', 'tester': 'tester', '测试工程师': 'tester',
@@ -54,7 +56,7 @@ function determineEventType(text, isDangerReply) {
 
 function classifyByKeywords(message) {
   const lowerMsg = message.toLowerCase();
-  for (const id of ['ceo', 'pm', 'architect', 'backend-dev', 'frontend-dev', 'qa', 'reviewer', 'tester']) {
+  for (const id of ['ceo', 'pm', 'architect', 'backend', 'frontend', 'qa', 'reviewer', 'tester']) {
     const role = ROLES[id];
     if (role.triggers?.some(t => lowerMsg.includes(t.toLowerCase()))) {
       return id;
@@ -83,7 +85,7 @@ async function classifyIntent(message) {
   }
 }
 
-function routeMessage(message, chatId) {
+async function routeMessage(message, chatId) {
   const mentionedRoles = parseAtMentions(message);
 
   if (mentionedRoles.includes('assistant')) {
@@ -115,6 +117,18 @@ function routeMessage(message, chatId) {
     };
   }
 
+  // Try API-based intent classification first, fall back to keywords
+  const apiMatch = await classifyIntent(message);
+  if (apiMatch) {
+    const role = getRole(apiMatch);
+    return {
+      role: apiMatch,
+      systemPrompt: role?.systemPrompt || null,
+      routingReason: `意图分类 → ${role?.name || apiMatch}`,
+      eventType: determineEventType(message, false),
+    };
+  }
+
   const keywordMatch = classifyByKeywords(message);
   if (keywordMatch) {
     const role = getRole(keywordMatch);
@@ -135,7 +149,7 @@ function routeMessage(message, chatId) {
 }
 
 function getDefaultSystemPrompt() {
-  return `你是一个飞书群聊中的AI助手，同时也是一个自治开发团队的管理者。
+  return `你是禹枢大模型管理平台 (yushu smart) 的 AI 助手，同时也是一个自治开发团队的管理者。
 
 你的团队包含以下8个专业角色，你可以通过以下方式调用：
 
@@ -151,7 +165,7 @@ function getDefaultSystemPrompt() {
 用户可以通过 @角色名 直接与对应角色对话。
 当用户提出的任务需要其他角色参与时，你可以建议调用相应的专家。
 
-当前处于 **Phase 2 多角色自治团队** 阶段。
+当前处于 **Phase 4 多角色自治团队** 阶段。
 请用简洁、友好、专业的方式回答问题。如果问题涉及代码，请给出清晰可用的代码示例。回答使用中文。`;
 }
 

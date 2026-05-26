@@ -81,10 +81,16 @@ function acquireFileLock(filePath, holder) {
 
 function releaseFileLock(filePath, holder) {
   const absPath = path.resolve(filePath);
-  db.releaseLock(absPath);
+  const existing = db.getDb().prepare('SELECT * FROM locks WHERE resource = ?').get(absPath);
+  if (existing && existing.holder === holder) {
+    db.releaseLock(absPath);
+    return true;
+  }
+  return false;
 }
 
 function releaseAllLocks(holder) {
+  db.getDb().prepare('DELETE FROM locks WHERE holder = ?').run(holder);
   db.cleanupExpiredLocks();
 }
 

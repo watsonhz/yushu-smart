@@ -43,14 +43,14 @@ class HeartbeatTracker {
   sendHeartbeat(taskId, message) {
     const t = this.tasks.get(taskId);
     if (!t) return;
-    sendTextMessage(t.chatId, message).catch(() => {});
+    sendTextMessage(t.chatId, message).catch(err => console.error('Heartbeat send failed:', err.message));
   }
 
   markDone(taskId, finalMessage) {
     const t = this.tasks.get(taskId);
     if (!t) return;
     t.done = true;
-    sendTextMessage(t.chatId, `[#${t.sequence + 1} 完成] ${finalMessage}`).catch(() => {});
+    sendTextMessage(t.chatId, `[#${t.sequence + 1} 完成] ${finalMessage}`).catch(err => console.error('Heartbeat send failed:', err.message));
   }
 
   removeTask(taskId) {

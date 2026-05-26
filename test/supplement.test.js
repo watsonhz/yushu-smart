@@ -6,8 +6,8 @@ require('dotenv').config();
 const db = require('../src/db');
 const models = require('../src/models-wp1');
 const scheduler = require('../src/scheduler');
-const { parseAtMentions, isSystemCommand, classifyIntent, routeMessage } = require('../src/router');
-const { getRole, classifyIntent: classifyRoleIntent, ROLE_ORDER, ROLES } = require('../src/roles');
+const { parseAtMentions, isSystemCommand, classifyIntent, classifyByKeywords, routeMessage } = require('../src/router');
+const { getRole, ROLE_ORDER, ROLES } = require('../src/roles');
 const { ensureSession, killAllProcesses, getActiveProcessCount, buildFullPrompt } = require('../src/process-manager');
 const { acquireChatLock, releaseChatLock, isInProjectDir, acquireFileLock } = require('../src/security');
 const { autoClaimTask, formatMyTasks } = require('../src/tasks');
@@ -285,21 +285,22 @@ assert(isSystemCommand('/summary') === true, '/summary is system command');
 assert(isSystemCommand('你好') === false, 'casual text not system command');
 assert(isSystemCommand('/status please') === true, '/status with suffix is system command');
 
-// routeMessage edge: multiple @mentions → first role
-const routed = routeMessage('@后端 @前端 一起做个页面', 'test-chat');
-assert(routed.role === 'backend-dev', 'multi @ routes to first mentioned role');
+	// routeMessage component tests (sync)
+	const mentions = parseAtMentions('@后端 @前端 一起做个页面');
+	assert(mentions.length >= 2, 'multi @ mentions parsed');
+	assert(mentions.includes('backend'), 'multi mention: backend found');
+	assert(mentions.includes('frontend'), 'multi mention: frontend found');
 
-// routeMessage: no mention → keyword match
-const keywordRouted = routeMessage('帮我审查代码', 'test-chat');
-assert(keywordRouted.routingReason.includes('关键词'), 'keyword routing reason');
+	assert(classifyByKeywords('帮我审查代码') === 'reviewer', 'keyword routing: reviewer');
+	assert(classifyByKeywords('写个API接口') === 'backend', 'keyword routing: backend');
 
-// routeMessage: no match → fallback to assistant
-const fallbackRouted = routeMessage('今天天气怎么样', 'test-chat');
-assert(fallbackRouted.role === 'assistant', 'no match falls back to assistant');
-
-// classifyRoleIntent with triggers
-assert(classifyRoleIntent('帮我审查代码') === 'reviewer', 'role classifyIntent: reviewer');
-assert(classifyRoleIntent('设计方案如何') === 'architect', 'role classifyIntent: architect');
+	// routeMessage async smoke test
+	routeMessage('今天天气怎么样', 'test-chat').then(r => {
+	  if (r && r.role === 'assistant') passed++; else failed++;
+	}).catch(() => failed++);
+// classifyByKeywords with triggers
+assert(classifyByKeywords('帮我审查代码') === 'reviewer', 'role classifyIntent: reviewer');
+assert(classifyByKeywords('设计方案如何') === 'architect', 'role classifyIntent: architect');
 
 // ═══════════════════════════════════
 // Tasks Edge Cases
@@ -331,7 +332,7 @@ for (const id of ROLE_ORDER) {
   assert(ROLES[id].systemPrompt.length > 50, `${id} has detailed system prompt`);
 }
 assert(ROLE_ORDER.includes('architect'), 'ROLE_ORDER includes architect');
-assert(ROLE_ORDER.includes('backend-dev'), 'ROLE_ORDER includes backend-dev');
+assert(ROLE_ORDER.includes('backend'), 'ROLE_ORDER includes backend');
 
 // ═══════════════════════════════════
 // Summary

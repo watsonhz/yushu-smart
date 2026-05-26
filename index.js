@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const express = require('express');
+const log = require('./src/logger');
 const db = require('./src/db');
 const models = require('./src/models-wp1');
 const models4 = require('./src/models-wp4');
@@ -35,7 +36,7 @@ const CHAT_ID = process.env.FEISHU_CHAT_ID || '';
 
 // ── Special Commands ──
 
-async function handleSpecialCommands(chatId, message, messageId) {
+async function handleSpecialCommands(chatId, message) {
   const lower = message.trim().toLowerCase();
 
   if (lower.startsWith('/task:') || lower.startsWith('/task：')) {
@@ -78,7 +79,7 @@ async function handleSpecialCommands(chatId, message, messageId) {
     const up = Math.floor(process.uptime());
     await sendTextMessage(chatId,
       `**系统状态**\n` +
-      `阶段: Phase 2\n` +
+      `阶段: Phase 4\n` +
       `活跃进程: ${count}\n` +
       `运行时间: ${Math.floor(up / 60)}分${up % 60}秒\n` +
       `任务看板: /board`
@@ -122,21 +123,21 @@ app.post('/feishu/event', async (req, res) => {
       if (db.messageExists(messageId)) return;
 
       db.insertMessage(messageId, chatId, 'user', userMessage);
-      console.log(`[${chatId}] User: ${userMessage}`);
+      log.info(`Message received`, { chatId, messageId });
 
-      const isSpecial = await handleSpecialCommands(chatId, userMessage, messageId);
+      const isSpecial = await handleSpecialCommands(chatId, userMessage);
       if (isSpecial) return;
 
       if (!acquireChatLock(chatId, 'event-handler', 30000)) {
-        console.log(`[${chatId}] Chat is locked, queueing message`);
+        log.warn(`Chat locked, message queued`, { chatId });
         return;
       }
 
       try {
-        const { role, systemPrompt, routingReason } = routeMessage(userMessage, chatId);
+        const { role, systemPrompt, routingReason } = await routeMessage(userMessage, chatId);
         const effectivePrompt = systemPrompt || getDefaultSystemPrompt();
 
-        console.log(`[${chatId}] Routing: ${routingReason} → ${role}`);
+        log.info(`Routing decision`, { chatId, routingReason, role });
 
         getOrSpawnAgent(chatId, role, effectivePrompt, userMessage, messageId)
           .then((reply) => {
@@ -145,15 +146,15 @@ app.post('/feishu/event', async (req, res) => {
             }
           })
           .catch((err) => {
-            console.error(`[${role}] Error:`, err.message);
-            sendTextMessage(chatId, `[${role}] 处理消息时出错：${err.message}`).catch(() => {});
+            log.error(`Agent error`, { role, error: err.message });
+            sendTextMessage(chatId, `[${role}] 处理消息时出错：${err.message}`).catch(e => log.error('sendTextMessage failed', { error: e.message }));
           });
       } finally {
         releaseChatLock(chatId);
       }
     }
   } catch (err) {
-    console.error('Event processing error:', err);
+    log.error('Event processing error', { error: err.message, stack: err.stack });
   }
 });
 
@@ -194,7 +195,7 @@ app.get('/health/roles', (req, res) => {
 // ── Global Error Handler ──
 
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
+  log.error('Unhandled error', { error: err.message, stack: err.stack });
   res.status(500).json({ error: 'Internal server error' });
 });
 
@@ -205,11 +206,8 @@ scheduler.startScheduler();
 
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
-  console.log(`Phase 2 Multi-Agent Team running on http://localhost:${PORT}`);
-  console.log(`Health: http://localhost:${PORT}/health`);
-  console.log(`Webhook: http://localhost:${PORT}/feishu/event`);
-  console.log(`Roles: http://localhost:${PORT}/health/roles`);
-  console.log('Team of 8 agents standing by. Use @角色名 or /board to start.');
+  log.info(`Server started`, { port: PORT, phase: 4 });
+  console.log(`禹枢大模型管理平台 (yushu smart): http://localhost:${PORT}/health`);
 
   if (CHAT_ID) {
     setTimeout(() => recoverFromCrash(CHAT_ID), 2000);
@@ -219,14 +217,14 @@ const server = app.listen(PORT, () => {
 // ── Graceful Shutdown ──
 
 process.on('SIGTERM', () => {
-  console.log('Shutting down...');
+  log.info('Shutting down...');
   killAllProcesses();
   scheduler.stopScheduler();
   server.close(() => process.exit(0));
 });
 
 process.on('SIGINT', () => {
-  console.log('Shutting down...');
+  log.info('Shutting down...');
   killAllProcesses();
   scheduler.stopScheduler();
   server.close(() => process.exit(0));

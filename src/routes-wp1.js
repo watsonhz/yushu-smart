@@ -8,6 +8,14 @@ const db = require('./db');
 
 const router = Router();
 
+function escapeCsv(val) {
+  const s = String(val ?? '');
+  if (s.includes('"') || s.includes(',') || s.includes('\n')) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
 // =============================================
 // WP1.2 - 资源池管理
 // =============================================
@@ -24,7 +32,7 @@ router.post('/pools', (req, res) => {
     m.createResourcePool(id, name, scheduler_policy, labels);
     res.status(201).json({ id, name, scheduler_policy: scheduler_policy || 'fifo' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -33,7 +41,7 @@ router.get('/pools', (req, res) => {
     const pools = m.getResourcePools();
     res.json({ items: pools, total: pools.length });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -48,7 +56,7 @@ router.get('/pools/:id', (req, res) => {
     }, 0);
     res.json({ ...pool, node_count: nodes.length, gpu_count: gpuCount });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -59,7 +67,7 @@ router.put('/pools/:id', (req, res) => {
     m.updateResourcePool(req.params.id, req.body);
     res.json({ status: 'updated', id: req.params.id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -72,7 +80,7 @@ router.delete('/pools/:id', (req, res) => {
     m.deleteResourcePool(req.params.id);
     res.json({ status: 'deleted', id: req.params.id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -105,7 +113,7 @@ router.post('/pools/:poolId/nodes', (req, res) => {
 
     res.status(201).json({ id, hostname, pool_id: req.params.poolId, gpu_count: gpuCount });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -114,7 +122,7 @@ router.get('/pools/:poolId/nodes', (req, res) => {
     const nodes = m.getNodes(req.params.poolId);
     res.json({ items: nodes, total: nodes.length });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -125,7 +133,7 @@ router.get('/nodes/:id', (req, res) => {
     const gpus = m.getGPUDevices(req.params.id);
     res.json({ ...node, gpu_devices: gpus });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -134,7 +142,7 @@ router.put('/nodes/:id', (req, res) => {
     m.updateNode(req.params.id, req.body);
     res.json({ status: 'updated', id: req.params.id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -143,7 +151,7 @@ router.delete('/nodes/:id', (req, res) => {
     m.deleteNode(req.params.id);
     res.json({ status: 'deleted', id: req.params.id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -153,7 +161,7 @@ router.post('/nodes/:id/heartbeat', (req, res) => {
     m.updateNodeHeartbeat(req.params.id, gpu_devices);
     res.json({ status: 'ok' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -162,7 +170,7 @@ router.post('/nodes/:id/drain', (req, res) => {
     m.updateNode(req.params.id, { status: 'maintenance' });
     res.json({ status: 'draining', id: req.params.id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -200,7 +208,7 @@ router.post('/tasks', (req, res) => {
       created_at: new Date().toISOString(),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -215,7 +223,7 @@ router.get('/tasks', (req, res) => {
     });
     res.json({ items: tasks, total: tasks.length });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -227,7 +235,7 @@ router.get('/tasks/:id', (req, res) => {
     const events = m.getTaskEvents(req.params.id);
     res.json({ ...task, spec, events });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -242,7 +250,7 @@ router.post('/tasks/:id/cancel', (req, res) => {
     m.createTaskEvent(req.params.id, 'cancelled', { reason: req.body.reason || 'user_cancelled' });
     res.json({ status: 'cancelled', id: req.params.id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -260,7 +268,7 @@ router.post('/tasks/:id/priority', (req, res) => {
     m.createTaskEvent(req.params.id, 'progress', { priority_changed: priority });
     res.json({ status: 'updated', priority, id: req.params.id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -269,7 +277,7 @@ router.get('/tasks/:id/events', (req, res) => {
     const events = m.getTaskEvents(req.params.id);
     res.json({ items: events, total: events.length });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -293,7 +301,7 @@ router.get('/queue', (req, res) => {
       running_count: running.length,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -311,7 +319,7 @@ router.post('/internal/audit-events', (req, res) => {
     m.createAuditEvent(req.body);
     res.status(202).json({ status: 'accepted' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -330,7 +338,7 @@ router.get('/audit-events', (req, res) => {
     });
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -344,15 +352,17 @@ router.get('/audit-events/export', (req, res) => {
     if (items.length >= 100000) {
       return res.status(413).json({ error: 'Export too large, narrow your time range' });
     }
-    let csv = 'event_id,tenant_id,actor_type,actor_id,actor_name,resource_type,resource_id,action,result,created_at\n';
-    for (const evt of items) {
-      csv += `"${evt.event_id}","${evt.tenant_id}","${evt.actor_type}","${evt.actor_id}","${evt.actor_name}","${evt.resource_type}","${evt.resource_id}","${evt.action}","${evt.result}","${evt.created_at}"\n`;
-    }
+    const header = 'event_id,tenant_id,actor_type,actor_id,actor_name,resource_type,resource_id,action,result,created_at';
+    const rows = items.map(e => [
+      e.event_id, e.tenant_id, e.actor_type, e.actor_id, e.actor_name,
+      e.resource_type, e.resource_id, e.action, e.result, e.created_at
+    ].map(escapeCsv).join(','));
+    const csv = [header, ...rows].join('\n') + '\n';
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="audit-export.csv"');
     res.send(csv);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -362,7 +372,7 @@ router.get('/audit-events/:id', (req, res) => {
     if (!evt) return res.status(404).json({ error: 'Audit event not found' });
     res.json(evt);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -392,7 +402,7 @@ router.post('/cost-records', (req, res) => {
 
     res.status(201).json({ status: 'created', total_cost: cost.totalCost, unit_price: cost.unitPrice });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -409,7 +419,7 @@ router.get('/cost-records', (req, res) => {
     });
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -418,7 +428,7 @@ router.get('/cost-records/summary', (req, res) => {
     const summary = m.getCostSummary(req.query.team_id, req.query.tenant_id, req.query.start, req.query.end);
     res.json({ items: summary });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -431,15 +441,17 @@ router.get('/cost-records/export', (req, res) => {
       end: req.query.end,
       page: 1, page_size: 100000,
     });
-    let csv = 'team_id,task_id,task_name,gpu_count,gpu_model,duration_seconds,unit_price_per_hour,total_cost,status,started_at,ended_at\n';
-    for (const r of result.items) {
-      csv += `"${r.team_id}","${r.task_id}","${r.task_name}",${r.gpu_count},"${r.gpu_model}",${r.duration_seconds},${r.unit_price_per_hour},${r.total_cost},"${r.status}","${r.started_at}","${r.ended_at}"\n`;
-    }
+    const header = 'team_id,task_id,task_name,gpu_count,gpu_model,duration_seconds,unit_price_per_hour,total_cost,status,started_at,ended_at';
+    const rows = result.items.map(r => [
+      r.team_id, r.task_id, r.task_name, r.gpu_count, r.gpu_model,
+      r.duration_seconds, r.unit_price_per_hour, r.total_cost, r.status, r.started_at, r.ended_at
+    ].map(escapeCsv).join(','));
+    const csv = [header, ...rows].join('\n') + '\n';
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="cost-export.csv"');
     res.send(csv);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -454,7 +466,7 @@ router.get('/audit/verify', (req, res) => {
     const result = m.verifyHashChain(fromId, toId);
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -466,7 +478,7 @@ router.get('/scheduler/status', (req, res) => {
   try {
     res.json(scheduler.getSchedulerStats());
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -475,7 +487,7 @@ router.post('/scheduler/tick', (req, res) => {
     scheduler.scheduleTick();
     res.json({ status: 'tick_triggered' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

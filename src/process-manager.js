@@ -1,4 +1,5 @@
 const { spawn } = require('child_process');
+const log = require('./logger');
 const db = require('./db');
 const { sendTextMessage } = require('./feishu');
 const { buildContext, summarizeWarm, summarizeCold } = require('./context');
@@ -46,14 +47,18 @@ function spawnAgent(chatId, roleName, roleSystemPrompt, userMessage, messageId) 
 
     heartbeatTracker.startTask(sessionId, chatId);
 
+    const model = process.env.CLAUDE_MODEL || 'sonnet';
     const child = spawn('claude', [
       '--print',
-      '--model', 'sonnet',
-      filtered,
+      '--model', model,
     ], {
       env: { ...process.env },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
+
+    // Pipe prompt via stdin (prevents argument injection)
+    child.stdin.write(filtered);
+    child.stdin.end();
 
     activeProcesses.set(sessionId, child);
 
@@ -63,7 +68,7 @@ function spawnAgent(chatId, roleName, roleSystemPrompt, userMessage, messageId) 
       activeProcesses.delete(sessionId);
       db.updateSessionStatus(sessionId, 'idle');
       heartbeatTracker.removeTask(sessionId);
-      sendTextMessage(chatId, `[${roleName}] 任务执行超时（5分钟），请重试或简化任务。`).catch(() => {});
+      sendTextMessage(chatId, `[${roleName}] 任务执行超时（5分钟），请重试或简化任务。`).catch(err => log.error('sendTextMessage failed', { error: err.message }));
       resolve(null);
     }, SPAWN_TIMEOUT_MS);
 
@@ -85,10 +90,10 @@ function spawnAgent(chatId, roleName, roleSystemPrompt, userMessage, messageId) 
       const result = filterSensitive(output.trim());
       if (result) {
         heartbeatTracker.markDone(sessionId, result.substring(0, 300));
-        sendTextMessage(chatId, `[${roleName}] ${result}`).catch(() => {});
+        sendTextMessage(chatId, `[${roleName}] ${result}`).catch(err => log.error('sendTextMessage failed', { error: err.message }));
       } else {
         heartbeatTracker.removeTask(sessionId);
-        sendTextMessage(chatId, `[${roleName}] 抱歉，处理过程中出现问题，请稍后重试。`).catch(() => {});
+        sendTextMessage(chatId, `[${roleName}] 抱歉，处理过程中出现问题，请稍后重试。`).catch(err => log.error('sendTextMessage failed', { error: err.message }));
       }
       resolve(result);
     });
@@ -100,7 +105,7 @@ function spawnAgent(chatId, roleName, roleSystemPrompt, userMessage, messageId) 
       heartbeatTracker.removeTask(sessionId);
       releaseAllLocks(sessionId);
       console.error(`[${roleName} spawn error]`, err.message);
-      sendTextMessage(chatId, `[${roleName}] 进程启动失败：${err.message}`).catch(() => {});
+      sendTextMessage(chatId, `[${roleName}] 进程启动失败：${err.message}`).catch(err => log.error('sendTextMessage failed', { error: err.message }));
       resolve(null);
     });
   });
@@ -125,7 +130,7 @@ function getOrSpawnAgent(chatId, roleName, roleSystemPrompt, userMessage, messag
     sendTextMessage(chatId,
       `⚠️ 检测到${dangerous.risk}操作：\n` +
       '为安全考虑，此操作需要你在群聊中回复 **确认执行** 来继续。'
-    ).catch(() => {});
+    ).catch(err => log.error('sendTextMessage failed', { error: err.message }));
     return Promise.resolve(null);
   }
 
@@ -180,7 +185,7 @@ function recoverFromCrash(chatId) {
     const inProgress = pendingTasks.filter(t => t.status === 'in_progress').length;
     sendTextMessage(chatId,
       `🔄 团队已恢复启动。待处理任务：${pendingTasks.length}个，其中${inProgress}个进行中。`
-    ).catch(() => {});
+    ).catch(err => log.error('sendTextMessage failed', { error: err.message }));
   }
 }
 

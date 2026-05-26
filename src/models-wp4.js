@@ -3,6 +3,8 @@
  * 覆盖：推理服务部署、多环境管理、自动扩缩容、服务端点管理
  */
 
+const { buildUpdate } = require('./db');
+
 let db;
 
 function initModels(database) {
@@ -184,18 +186,9 @@ function getInferenceServices(filters) {
 }
 
 function updateInferenceService(id, fields) {
-  const sets = [];
-  const vals = [];
-  for (const [k, v] of Object.entries(fields)) {
-    if (['status', 'status_reason', 'endpoint_url', 'replica_count', 'target_replica_count', 'config', 'health_check_path'].includes(k)) {
-      sets.push(`${k} = ?`);
-      vals.push(k === 'config' ? JSON.stringify(v) : v);
-    }
-  }
-  if (sets.length === 0) return;
-  sets.push("updated_at = datetime('now')");
-  vals.push(id);
-  return db.prepare(`UPDATE inference_services SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+  const stmt = buildUpdate('inference_services', id, 'id', fields,
+    ['status', 'status_reason', 'endpoint_url', 'replica_count', 'target_replica_count', 'config', 'health_check_path', 'model_version', 'protocol', 'model_name'], ['config']);
+  if (stmt) return db.prepare(stmt.sql).run(...stmt.params);
 }
 
 function deleteInferenceService(id) {
@@ -244,16 +237,30 @@ function generateApiSecret() {
   return crypto.randomBytes(32).toString('hex');
 }
 
+function hashSecret(secret) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(secret, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifySecret(secret, stored) {
+  const [salt, hash] = stored.split(':');
+  if (!salt || !hash) return false;
+  const derived = crypto.scryptSync(secret, salt, 64).toString('hex');
+  return crypto.timingSafeEqual(Buffer.from(derived), Buffer.from(hash));
+}
+
 function createApiCredential(serviceId, name, createdBy, expiresInDays) {
   const id = `cred-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const apiKey = generateApiKey();
   const apiSecret = generateApiSecret();
+  const secretHash = hashSecret(apiSecret);
   const expiresAt = expiresInDays
     ? new Date(Date.now() + expiresInDays * 86400000).toISOString()
     : null;
   db.prepare(
     'INSERT INTO api_credentials (id, service_id, api_key, api_secret, name, created_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, serviceId, apiKey, apiSecret, name || 'default', createdBy || 'system', expiresAt);
+  ).run(id, serviceId, apiKey, secretHash, name || 'default', createdBy || 'system', expiresAt);
   return { id, api_key: apiKey, api_secret: apiSecret, name: name || 'default', expires_at: expiresAt };
 }
 
@@ -263,13 +270,15 @@ function getApiCredentials(serviceId) {
   ).all(serviceId);
 }
 
-function validateApiKey(apiKey) {
+function validateApiKey(apiKey, apiSecret) {
   const cred = db.prepare(
     "SELECT * FROM api_credentials WHERE api_key = ? AND status = 'active' AND (expires_at IS NULL OR expires_at >= datetime('now'))"
   ).get(apiKey);
   if (!cred) return null;
-  // 更新 last_used_at
   db.prepare("UPDATE api_credentials SET last_used_at = datetime('now') WHERE id = ?").run(cred.id);
+  if (apiSecret && !verifySecret(apiSecret, cred.api_secret)) {
+    return { ...cred, _secret_mismatch: true };
+  }
   return cred;
 }
 
@@ -284,18 +293,9 @@ function revokeApiCredential(id) {
 function createOrUpdateScalingPolicy(serviceId, policy) {
   const existing = db.prepare('SELECT id FROM scaling_policies WHERE service_id = ?').get(serviceId);
   if (existing) {
-    const sets = [];
-    const vals = [];
-    for (const [k, v] of Object.entries(policy)) {
-      if (['min_replicas', 'max_replicas', 'target_cpu_utilization', 'target_memory_utilization', 'cooldown_seconds', 'batch_size', 'batch_max_wait_ms'].includes(k)) {
-        sets.push(`${k} = ?`);
-        vals.push(v);
-      }
-    }
-    if (sets.length === 0) return existing.id;
-    sets.push("updated_at = datetime('now')");
-    vals.push(existing.id);
-    db.prepare(`UPDATE scaling_policies SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+    const stmt = buildUpdate('scaling_policies', existing.id, 'id', policy,
+      ['min_replicas', 'max_replicas', 'target_cpu_utilization', 'target_memory_utilization', 'cooldown_seconds', 'batch_size', 'batch_max_wait_ms']);
+    if (stmt) db.prepare(stmt.sql).run(...stmt.params);
     return existing.id;
   }
   const id = `scale-${serviceId}`;
@@ -332,18 +332,9 @@ function getTrafficRules(serviceId) {
 }
 
 function updateTrafficRule(id, fields) {
-  const sets = [];
-  const vals = [];
-  for (const [k, v] of Object.entries(fields)) {
-    if (['weight', 'target_revision', 'enabled', 'headers'].includes(k)) {
-      sets.push(`${k} = ?`);
-      vals.push(k === 'headers' ? JSON.stringify(v) : v);
-    }
-  }
-  if (sets.length === 0) return;
-  sets.push("updated_at = datetime('now')");
-  vals.push(id);
-  return db.prepare(`UPDATE traffic_rules SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+  const stmt = buildUpdate('traffic_rules', id, 'id', fields,
+    ['weight', 'target_revision', 'enabled', 'headers'], ['headers']);
+  if (stmt) return db.prepare(stmt.sql).run(...stmt.params);
 }
 
 // =============================================
@@ -438,7 +429,7 @@ function oneClickDeploy(name, envId, modelName, modelVersion, protocol, config, 
     });
     updatePipelineStatus(pipelineId, 'success');
 
-    return { service_id: serviceId, endpoint_url: endpointUrl, credential };
+    return { id: serviceId, endpoint_url: endpointUrl, credential };
   });
   return txn();
 }
@@ -454,7 +445,7 @@ module.exports = {
   createDeploymentRevision, getDeploymentRevisions, getLatestRevision,
 
   // WP4.1 API 凭证
-  createApiCredential, getApiCredentials, validateApiKey, revokeApiCredential,
+  createApiCredential, getApiCredentials, validateApiKey, revokeApiCredential, verifySecret,
 
   // WP4.2 扩缩容
   createOrUpdateScalingPolicy, getScalingPolicy,

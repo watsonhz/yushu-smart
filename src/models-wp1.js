@@ -5,6 +5,7 @@
 
 const path = require('path');
 const DB_PATH = path.join(__dirname, '..', '.data', 'bot.db');
+const { buildUpdate } = require('./db');
 
 let db;
 
@@ -216,18 +217,9 @@ function getResourcePool(id) {
 }
 
 function updateResourcePool(id, fields) {
-  const sets = [];
-  const vals = [];
-  for (const [k, v] of Object.entries(fields)) {
-    if (['name', 'scheduler_policy', 'status', 'labels'].includes(k)) {
-      sets.push(`${k} = ?`);
-      vals.push(k === 'labels' ? JSON.stringify(v) : v);
-    }
-  }
-  if (sets.length === 0) return;
-  sets.push("updated_at = datetime('now')");
-  vals.push(id);
-  db.prepare(`UPDATE resource_pools SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+  const stmt = buildUpdate('resource_pools', id, 'id', fields,
+    ['name', 'scheduler_policy', 'status', 'labels'], ['labels']);
+  if (stmt) db.prepare(stmt.sql).run(...stmt.params);
 }
 
 function deleteResourcePool(id) {
@@ -253,18 +245,9 @@ function getNode(id) {
 }
 
 function updateNode(id, fields) {
-  const sets = [];
-  const vals = [];
-  for (const [k, v] of Object.entries(fields)) {
-    if (['status', 'labels', 'specs', 'last_heartbeat'].includes(k)) {
-      sets.push(`${k} = ?`);
-      vals.push(typeof v === 'object' ? JSON.stringify(v) : v);
-    }
-  }
-  if (sets.length === 0) return;
-  sets.push("updated_at = datetime('now')");
-  vals.push(id);
-  db.prepare(`UPDATE nodes SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+  const stmt = buildUpdate('nodes', id, 'id', fields,
+    ['status', 'labels', 'specs', 'last_heartbeat'], ['labels', 'specs']);
+  if (stmt) db.prepare(stmt.sql).run(...stmt.params);
 }
 
 function updateNodeHeartbeat(id, gpuDevices) {

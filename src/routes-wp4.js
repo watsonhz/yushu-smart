@@ -16,7 +16,7 @@ router.get('/environments', (req, res) => {
     const envs = m.getEnvironments();
     res.json({ items: envs });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -26,7 +26,7 @@ router.get('/environments/:id', (req, res) => {
     if (!env) return res.status(404).json({ error: 'Environment not found' });
     res.json(env);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -37,7 +37,7 @@ router.post('/environments', (req, res) => {
     const id = m.createEnvironment(name, type || 'development', base_url, namespace, config);
     res.status(201).json({ id, name, type: type || 'development' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -51,6 +51,9 @@ router.post('/services', (req, res) => {
     if (!name || !env_id || !model_name) {
       return res.status(400).json({ error: 'name, env_id, model_name required' });
     }
+    if (!model_version) {
+      return res.status(400).json({ error: 'model_version is required' });
+    }
 
     // 一键部署
     const result = m.oneClickDeploy(name, env_id, model_name, model_version, protocol, config, scaling_policy, created_by);
@@ -60,7 +63,7 @@ router.post('/services', (req, res) => {
       ...result,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -74,7 +77,7 @@ router.get('/services', (req, res) => {
     });
     res.json({ items: services, total: services.length });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -84,7 +87,7 @@ router.get('/services/:id', (req, res) => {
     if (!service) return res.status(404).json({ error: 'Service not found' });
     res.json(service);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -93,7 +96,7 @@ router.put('/services/:id', (req, res) => {
     const service = m.getInferenceService(req.params.id);
     if (!service) return res.status(404).json({ error: 'Service not found' });
 
-    const allowed = ['status', 'status_reason', 'config', 'health_check_path', 'target_replica_count'];
+    const allowed = ['status', 'status_reason', 'config', 'health_check_path', 'target_replica_count', 'model_version', 'protocol', 'endpoint_url'];
     const fields = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) fields[key] = req.body[key];
@@ -102,7 +105,7 @@ router.put('/services/:id', (req, res) => {
 
     res.json({ status: 'updated', id: req.params.id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -113,7 +116,7 @@ router.delete('/services/:id', (req, res) => {
     m.deleteInferenceService(req.params.id);
     res.json({ status: 'deleted', id: req.params.id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -128,7 +131,7 @@ router.get('/services/:id/revisions', (req, res) => {
     const revisions = m.getDeploymentRevisions(req.params.id);
     res.json({ items: revisions, total: revisions.length });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -184,7 +187,7 @@ router.post('/services/:id/rollback', (req, res) => {
       target_model_version: targetRev.model_version,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -202,7 +205,7 @@ router.post('/services/:id/credentials', (req, res) => {
 
     res.status(201).json(credential);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -213,7 +216,7 @@ router.get('/services/:id/credentials', (req, res) => {
     const credentials = m.getApiCredentials(req.params.id);
     res.json({ items: credentials });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -222,7 +225,7 @@ router.post('/credentials/:id/revoke', (req, res) => {
     m.revokeApiCredential(req.params.id);
     res.json({ status: 'revoked', id: req.params.id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -239,7 +242,7 @@ router.post('/services/:id/scaling', (req, res) => {
 
     res.status(201).json({ status: 'configured', id: policyId });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -251,7 +254,7 @@ router.get('/services/:id/scaling', (req, res) => {
     if (!policy) return res.status(404).json({ error: 'No scaling policy configured' });
     res.json(policy);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -271,7 +274,7 @@ router.post('/services/:id/traffic-rules', (req, res) => {
 
     res.status(201).json({ status: 'created', id, rule_type });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -282,7 +285,7 @@ router.get('/services/:id/traffic-rules', (req, res) => {
     const rules = m.getTrafficRules(req.params.id);
     res.json({ items: rules });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -291,7 +294,7 @@ router.put('/traffic-rules/:id', (req, res) => {
     m.updateTrafficRule(req.params.id, req.body);
     res.json({ status: 'updated', id: req.params.id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -306,7 +309,7 @@ router.get('/services/:id/pipelines', (req, res) => {
     const pipelines = m.getPipelines(req.params.id, parseInt(req.query.limit) || 20);
     res.json({ items: pipelines });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -319,12 +322,9 @@ router.post('/internal/validate-key', (req, res) => {
     const { api_key, api_secret } = req.body;
     if (!api_key) return res.status(400).json({ error: 'api_key required' });
 
-    const cred = m.validateApiKey(api_key);
+    const cred = m.validateApiKey(api_key, api_secret);
     if (!cred) return res.status(401).json({ valid: false, error: 'Invalid or expired API key' });
-
-    if (api_secret && cred.api_secret !== api_secret) {
-      return res.status(401).json({ valid: false, error: 'Invalid API secret' });
-    }
+    if (cred._secret_mismatch) return res.status(401).json({ valid: false, error: 'Invalid API secret' });
 
     res.json({
       valid: true,
@@ -332,7 +332,7 @@ router.post('/internal/validate-key', (req, res) => {
       credential_name: cred.name,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

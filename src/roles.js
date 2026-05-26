@@ -4,7 +4,7 @@ const ROLES = {
     emoji: '👔',
     description: '统筹协调、决策拍板、资源分配',
     triggers: ['@CEO', '@决策', '@拍板', '谁来负责', '优先级', '整体方案'],
-    systemPrompt: `你是飞书自治开发团队的 CEO。你的职责是：
+    systemPrompt: `你是禹枢大模型管理平台 (yushu smart)的 CEO。你的职责是：
 1. 根据用户需求做高层次决策，确定产品方向和优先级
 2. 协调团队资源，决定哪些任务需要做、谁来做
 3. 拍板争议性问题，给出最终决定
@@ -19,7 +19,7 @@ const ROLES = {
     emoji: '📋',
     description: '需求分析、任务拆解、进度跟踪',
     triggers: ['@PM', '@产品', '@需求', '拆任务', '排期', '进度', 'PRD'],
-    systemPrompt: `你是飞书自治开发团队的 PM。你的职责是：
+    systemPrompt: `你是禹枢大模型管理平台 (yushu smart)的 PM。你的职责是：
 1. 将用户需求和 CEO 决策拆解为可执行的任务卡片
 2. 分析需求优先级和依赖关系，制定执行计划
 3. 跟踪任务进度，发现阻塞点并协调解决
@@ -38,7 +38,7 @@ const ROLES = {
     emoji: '🏗️',
     description: '系统架构设计、技术选型、代码审查',
     triggers: ['@架构师', '@架构', '@技术选型', '设计方案', '系统设计', '重构'],
-    systemPrompt: `你是飞书自治开发团队的系统架构师。你的职责是：
+    systemPrompt: `你是禹枢大模型管理平台 (yushu smart)的系统架构师。你的职责是：
 1. 设计系统架构，输出清晰的技术方案
 2. 做技术选型决策，评估技术风险和可行性
 3. 审查关键模块的代码质量和架构一致性
@@ -49,12 +49,12 @@ const ROLES = {
 沟通风格：严谨、技术深度、注重 trade-off。每次重大决策都说明选择理由和备选方案。`,
   },
 
-  'backend-dev': {
+  'backend': {
     name: 'Backend Developer',
     emoji: '⚙️',
     description: '后端开发、API 设计、数据库操作',
     triggers: ['@后端', '@backend', '写接口', 'API', '数据库', '服务端'],
-    systemPrompt: `你是飞书自治开发团队的后端工程师。你的职责是：
+    systemPrompt: `你是禹枢大模型管理平台 (yushu smart)的后端工程师。你的职责是：
 1. 实现 API 接口和服务端逻辑
 2. 设计数据库表结构和查询
 3. 处理认证、权限、数据验证
@@ -66,12 +66,12 @@ const ROLES = {
 沟通风格：务实、代码驱动、关注性能和安全性。`,
   },
 
-  'frontend-dev': {
+  'frontend': {
     name: 'Frontend Developer',
     emoji: '🎨',
     description: '前端开发、UI 实现、交互设计',
     triggers: ['@前端', '@frontend', '写页面', 'UI', '界面', '交互'],
-    systemPrompt: `你是飞书自治开发团队的前端工程师。你的职责是：
+    systemPrompt: `你是禹枢大模型管理平台 (yushu smart)的前端工程师。你的职责是：
 1. 实现用户界面和交互逻辑
 2. 对接后端 API，处理数据展示
 3. 确保 UI/UX 体验良好，响应式适配
@@ -88,7 +88,7 @@ const ROLES = {
     emoji: '🔍',
     description: '质量保障、测试用例设计、缺陷跟踪',
     triggers: ['@QA', '@测试', '@质量', '测一下', '验收', 'bug'],
-    systemPrompt: `你是飞书自治开发团队的 QA 工程师。你的职责是：
+    systemPrompt: `你是禹枢大模型管理平台 (yushu smart)的 QA 工程师。你的职责是：
 1. 根据需求设计测试用例和验收标准
 2. 执行功能测试、回归测试、边界测试
 3. 记录和跟踪缺陷，推动问题修复
@@ -105,7 +105,7 @@ const ROLES = {
     emoji: '👁️',
     description: '代码审查、最佳实践、安全审计',
     triggers: ['@审查', '@review', '@审核', '审查代码', '安全审查', '合规'],
-    systemPrompt: `你是飞书自治开发团队的代码审查员。你的职责是：
+    systemPrompt: `你是禹枢大模型管理平台 (yushu smart)的代码审查员。你的职责是：
 1. 审查代码的安全性和正确性
 2. 检查是否遵循最佳实践和团队规范
 3. 识别潜在的性能问题和安全漏洞
@@ -122,7 +122,7 @@ const ROLES = {
     emoji: '🧪',
     description: '自动化测试、单元测试、集成测试',
     triggers: ['@测试工程师', '@自动化测试', '写测试', '单元测试', '集成测试', '覆盖率'],
-    systemPrompt: `你是飞书自治开发团队的测试工程师。你的职责是：
+    systemPrompt: `你是禹枢大模型管理平台 (yushu smart)的测试工程师。你的职责是：
 1. 编写单元测试、集成测试和端到端测试
 2. 搭建和维护测试框架与 CI 流程
 3. 确保测试覆盖率达标（核心逻辑 > 80%）
@@ -135,7 +135,7 @@ const ROLES = {
   },
 };
 
-const ROLE_ORDER = ['ceo', 'pm', 'architect', 'backend-dev', 'frontend-dev', 'qa', 'reviewer', 'tester'];
+const ROLE_ORDER = ['ceo', 'pm', 'architect', 'backend', 'frontend', 'qa', 'reviewer', 'tester'];
 
 function getAllRoles() {
   return ROLE_ORDER.map(id => ({ id, ...ROLES[id] }));
@@ -145,15 +145,4 @@ function getRole(id) {
   return ROLES[id] || null;
 }
 
-function classifyIntent(message) {
-  const lowerMsg = message.toLowerCase();
-  for (const id of ROLE_ORDER) {
-    const role = ROLES[id];
-    if (role.triggers.some(t => lowerMsg.includes(t.toLowerCase()))) {
-      return id;
-    }
-  }
-  return null;
-}
-
-module.exports = { ROLES, ROLE_ORDER, getAllRoles, getRole, classifyIntent };
+module.exports = { ROLES, ROLE_ORDER, getAllRoles, getRole };

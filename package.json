@@ -1,15 +1,19 @@
 {
-  "name": "feishu-claude-bot",
+  "name": "yushu-smart",
   "version": "1.0.0",
-  "description": "",
+  "description": "禹枢大模型管理平台 — 多角色自治团队 AI 调度与部署系统",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node test/integration.test.js && node test/wp4.test.js && node test/supplement.test.js"
   },
-  "keywords": [],
+  "keywords": ["ai", "llm", "multi-agent", "scheduler", "deployment"],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hziotdev/yushu-smart"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
     "@larksuiteoapi/node-sdk": "^1.30.0",
