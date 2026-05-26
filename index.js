@@ -166,6 +166,12 @@ app.use('/api/v1', wp1Routes);
 
 app.use('/api/v1', wp4Routes);
 
+// ── Root ──
+
+app.get('/', (req, res) => {
+  res.redirect('/health');
+});
+
 // ── Health Endpoints ──
 
 app.get('/health', (req, res) => {
