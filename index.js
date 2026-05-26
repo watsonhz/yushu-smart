@@ -23,6 +23,14 @@ models4.initModels(db.getDb());
 const app = express();
 app.use(express.json());
 
+// 全局 JSON 解析错误处理 — 返回 JSON 而非 HTML 栈信息
+app.use((err, req, res, _next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ error: 'Invalid JSON', code: 'BAD_REQUEST' });
+  }
+  _next(err);
+});
+
 const CHAT_ID = process.env.FEISHU_CHAT_ID || '';
 
 // ── Special Commands ──

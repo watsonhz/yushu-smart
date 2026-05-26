@@ -93,8 +93,12 @@ router.put('/services/:id', (req, res) => {
     const service = m.getInferenceService(req.params.id);
     if (!service) return res.status(404).json({ error: 'Service not found' });
 
-    const { status, config, health_check_path, target_replica_count } = req.body;
-    m.updateInferenceService(req.params.id, { status, config, health_check_path, target_replica_count });
+    const allowed = ['status', 'status_reason', 'config', 'health_check_path', 'target_replica_count'];
+    const fields = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) fields[key] = req.body[key];
+    }
+    m.updateInferenceService(req.params.id, fields);
 
     res.json({ status: 'updated', id: req.params.id });
   } catch (err) {
