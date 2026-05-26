@@ -16,6 +16,10 @@ router.post('/pools', (req, res) => {
   try {
     const { name, scheduler_policy, labels } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
+    const validPolicies = ['fifo', 'fair', 'priority'];
+    if (scheduler_policy && !validPolicies.includes(scheduler_policy)) {
+      return res.status(400).json({ error: `Invalid scheduler_policy. Must be one of: ${validPolicies.join(', ')}` });
+    }
     const id = `pool-${Date.now()}`;
     m.createResourcePool(id, name, scheduler_policy, labels);
     res.status(201).json({ id, name, scheduler_policy: scheduler_policy || 'fifo' });
