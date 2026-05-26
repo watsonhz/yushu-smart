@@ -50,6 +50,8 @@ router.get('/pools/:id', (req, res) => {
 
 router.put('/pools/:id', (req, res) => {
   try {
+    const pool = m.getResourcePool(req.params.id);
+    if (!pool) return res.status(404).json({ error: 'Pool not found' });
     m.updateResourcePool(req.params.id, req.body);
     res.json({ status: 'updated', id: req.params.id });
   } catch (err) {
