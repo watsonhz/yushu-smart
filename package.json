@@ -12,7 +12,7 @@
   "type": "commonjs",
   "repository": {
     "type": "git",
-    "url": "https://github.com/hziotdev/yushu-smart"
+    "url": "https://github.com/watsonhz/yushu-smart"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
