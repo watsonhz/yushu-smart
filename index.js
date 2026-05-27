@@ -9,6 +9,7 @@ const wp1Routes = require('./src/routes-wp1');
 const wp4Routes = require('./src/routes-wp4');
 const scheduler = require('./src/scheduler');
 const { sendTextMessage } = require('./src/feishu');
+const { sendTextMessage: sendWecomMessage, sendMarkdownMessage: sendWecomMarkdown, parseMessage: parseWecomMessage, verifySignature: verifyWecomSig, decryptMessage: decryptWecom } = require('./src/wecom');
 const { routeMessage, getDefaultSystemPrompt } = require('./src/router');
 const { getOrSpawnAgent, startIdleReclaimer, killAllProcesses, getActiveProcessCount, recoverFromCrash } = require('./src/process-manager');
 const { getAllRoles, getRole } = require('./src/roles');
@@ -23,6 +24,7 @@ models4.initModels(db.getDb());
 
 const app = express();
 app.use(express.json());
+app.use(express.static('public'));
 
 // 全局 JSON 解析错误处理 — 返回 JSON 而非 HTML 栈信息
 app.use((err, req, res, _next) => {
@@ -158,6 +160,85 @@ app.post('/feishu/event', async (req, res) => {
   }
 });
 
+// ── WeCom Webhook Endpoint ──
+
+app.get('/wecom/event', (req, res) => {
+  const { msg_signature, timestamp, nonce, echostr } = req.query;
+  if (verifyWecomSig(timestamp, nonce, echostr, msg_signature)) {
+    const decrypted = decryptWecom(echostr);
+    res.send(decrypted || echostr);
+  } else {
+    res.status(403).send('Forbidden');
+  }
+});
+
+app.post('/wecom/event', async (req, res) => {
+  try {
+    // WeCom expects immediate 200 response
+    res.status(200).send('success');
+
+    const body = req.body;
+
+    // Handle XML-encrypted messages
+    let parsedBody = body;
+    if (body.encrypt && body.msg_signature) {
+      const decrypted = decryptWecom(body.encrypt);
+      if (decrypted) {
+        try { parsedBody = JSON.parse(decrypted); } catch {
+          log.error('Failed to parse decrypted WeCom message');
+          return;
+        }
+      }
+    }
+
+    const parsed = parseWecomMessage(parsedBody);
+    if (!parsed || !parsed.content) return;
+
+    log.info(`WeCom message received`, { chatId: parsed.chatId, user: parsed.fromUser });
+
+    if (db.messageExists(parsed.messageId)) return;
+    db.insertMessage(parsed.messageId, parsed.chatId, 'user', parsed.content);
+
+    // Handle special commands
+    const isSpecial = await handleSpecialCommands(parsed.chatId, parsed.content);
+    if (isSpecial) return;
+
+    if (!acquireChatLock(parsed.chatId, 'wecom-event', 30000)) {
+      log.warn(`Chat locked (WeCom), message queued`, { chatId: parsed.chatId });
+      return;
+    }
+
+    try {
+      const { role, systemPrompt, routingReason } = await routeMessage(parsed.content, parsed.chatId);
+      const effectivePrompt = systemPrompt || getDefaultSystemPrompt();
+
+      log.info(`WeCom routing`, { chatId: parsed.chatId, routingReason, role });
+
+      const WECOM_WEBHOOK_URL = process.env.WECOM_WEBHOOK_URL || '';
+      if (!WECOM_WEBHOOK_URL) {
+        log.warn('WECOM_WEBHOOK_URL not configured, cannot reply');
+        return;
+      }
+
+      getOrSpawnAgent(parsed.chatId, role, effectivePrompt, parsed.content, parsed.messageId)
+        .then((reply) => {
+          if (reply) {
+            db.insertMessage(`reply-${parsed.messageId}`, parsed.chatId, role, reply);
+            sendWecomMessage(WECOM_WEBHOOK_URL, `[${role}] ${reply}`).catch(e => log.error('WeCom send failed', { error: e.message }));
+          }
+        })
+        .catch((err) => {
+          log.error(`WeCom agent error`, { role, error: err.message });
+          sendWecomMessage(WECOM_WEBHOOK_URL, `[${role}] 处理消息时出错：${err.message}`).catch(e => log.error('WeCom send failed', { error: e.message }));
+        });
+    } finally {
+      releaseChatLock(parsed.chatId);
+    }
+  } catch (err) {
+    log.error('WeCom event error', { error: err.message, stack: err.stack });
+  }
+});
+
 // ── WP1 API Routes ──
 
 app.use('/api/v1', wp1Routes);
@@ -165,12 +246,6 @@ app.use('/api/v1', wp1Routes);
 // ── WP4 API Routes ──
 
 app.use('/api/v1', wp4Routes);
-
-// ── Root ──
-
-app.get('/', (req, res) => {
-  res.redirect('/health');
-});
 
 // ── Health Endpoints ──
 
@@ -182,6 +257,10 @@ app.get('/health', (req, res) => {
     activeProcesses: getActiveProcessCount(),
     uptime: process.uptime(),
     model: 'deepseek-v4-flash',
+    channels: {
+      feishu: !!process.env.FEISHU_CHAT_ID,
+      wecom: !!process.env.WECOM_WEBHOOK_URL,
+    },
     wp4: { environments: true },
     timestamp: new Date().toISOString(),
   });

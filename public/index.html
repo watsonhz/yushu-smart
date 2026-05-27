@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>禹枢大模型管理平台</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --border: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8;
+    --green: #4ade80; --amber: #fbbf24; --red: #f87171; --purple: #a78bfa;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; padding:24px; min-height:100vh; }
+  .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
+  .header h1 { font-size:24px; font-weight:700; }
+  .header .badge { background:var(--accent); color:var(--bg); padding:4px 12px; border-radius:12px; font-size:13px; font-weight:600; }
+  .status-bar { display:flex; gap:12px; margin-bottom:24px; }
+  .status-dot { width:8px; height:8px; border-radius:50%; background:var(--green); display:inline-block; margin-right:6px; animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; margin-bottom:24px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; }
+  .card h3 { font-size:14px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:12px; }
+  .stat-value { font-size:32px; font-weight:700; }
+  .stat-label { font-size:13px; color:var(--muted); margin-top:4px; }
+  .role-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; margin-bottom:24px; }
+  .role-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px; text-align:center; }
+  .role-card .emoji { font-size:28px; margin-bottom:8px; }
+  .role-card .name { font-weight:600; font-size:15px; }
+  .role-card .desc { font-size:12px; color:var(--muted); margin-top:4px; }
+  .table-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:.5px; }
+  .method { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; font-family:monospace; }
+  .method.get { background:#1e3a5f; color:#60a5fa; }
+  .method.post { background:#1a3d2e; color:#4ade80; }
+  .method.put { background:#3d2e1a; color:#fbbf24; }
+  .method.delete { background:#3d1a1a; color:#f87171; }
+  .section-title { font-size:18px; font-weight:700; margin-bottom:16px; margin-top:32px; }
+  .refresh { font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>禹枢 yushu-smart</h1>
+    <div class="refresh" id="refreshInfo">自动刷新中...</div>
+  </div>
+  <span class="badge" id="phaseBadge">Phase --</span>
+</div>
+
+<div class="status-bar">
+  <span id="statusDot"></span>
+  <span id="statusText" style="font-size:14px;">加载中...</span>
+</div>
+
+<div class="grid" id="statsGrid"></div>
+
+<div class="section-title">自治开发团队</div>
+<div class="role-grid" id="roleGrid"></div>
+
+<div class="section-title">API 端点</div>
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+    <tbody id="apiTable"></tbody>
+  </table>
+</div>
+
+<script>
+const API_BASE = window.location.origin;
+
+const endpoints = [
+  ['GET', '/health', '系统健康检查'],
+  ['GET', '/health/roles', '团队角色列表'],
+  ['GET', '/api/v1/pools', '资源池列表'],
+  ['POST', '/api/v1/pools', '创建资源池'],
+  ['GET', '/api/v1/nodes/:id', '节点详情'],
+  ['POST', '/api/v1/nodes/:id/heartbeat', '节点心跳'],
+  ['GET', '/api/v1/tasks', '任务列表'],
+  ['POST', '/api/v1/tasks', '创建调度任务'],
+  ['GET', '/api/v1/queue', '队列状态'],
+  ['GET', '/api/v1/scheduler/status', '调度器状态'],
+  ['POST', '/api/v1/services', '一键部署推理服务'],
+  ['GET', '/api/v1/services', '推理服务列表'],
+  ['POST', '/api/v1/services/:id/rollback', '服务回滚'],
+  ['GET', '/api/v1/environments', '环境列表'],
+  ['GET', '/api/v1/audit-events', '审计事件列表'],
+  ['GET', '/api/v1/cost-records/summary', '费用汇总'],
+];
+
+async function refresh() {
+  try {
+    const h = await fetch(API_BASE + '/health').then(r => r.json());
+    const roles = await fetch(API_BASE + '/health/roles').then(r => r.json());
+
+    document.getElementById('phaseBadge').textContent = 'Phase ' + h.phase;
+    document.getElementById('statusText').innerHTML =
+      `<span class="status-dot"></span> 运行正常 · v${h.version} · ${h.model} · 活跃进程 ${h.activeProcesses}`;
+    document.getElementById('refreshInfo').textContent =
+      `更新于 ${new Date().toLocaleTimeString('zh-CN')} · 已运行 ${Math.floor(h.uptime / 60)}分${Math.floor(h.uptime % 60)}秒`;
+
+    const channels = h.channels || {};
+    document.getElementById('statsGrid').innerHTML = [
+      { v: h.phase, l: '系统阶段' },
+      { v: h.version, l: '版本号' },
+      { v: h.model, l: '后端模型' },
+      { v: h.activeProcesses, l: '活跃进程' },
+      { v: channels.feishu ? '🟢 飞书' : '⚫ 飞书', l: '飞书通道' },
+      { v: channels.wecom ? '🟢 企微' : '⚫ 企微', l: '企微通道' },
+    ].map(s => `<div class="card"><div class="stat-value">${s.v}</div><div class="stat-label">${s.l}</div></div>`).join('');
+
+    document.getElementById('roleGrid').innerHTML = (roles.roles || []).map(r =>
+      `<div class="role-card"><div class="emoji">${r.emoji}</div><div class="name">${r.name}</div><div class="desc">${r.description}</div></div>`
+    ).join('');
+
+    document.getElementById('apiTable').innerHTML = endpoints.map(([m, p, d]) =>
+      `<tr><td><span class="method ${m.toLowerCase()}">${m}</span></td><td style="font-family:monospace;">${p}</td><td>${d}</td></tr>`
+    ).join('');
+  } catch(e) {
+    document.getElementById('statusText').innerHTML = '<span style="color:var(--red);">连接失败</span>';
+  }
+}
+
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>
